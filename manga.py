@@ -63,7 +63,7 @@ class MangaPandaChecker(HTMLParser):
 
         self.feed(html)
 
-        return sorted(self.chapter_list)
+        return [chapter.lower() for chapter in self.chapter_list]
 
 
 def get_old_listing(manga):
@@ -72,7 +72,7 @@ def get_old_listing(manga):
     except FileNotFoundError:
         return []
 
-    return [chapter.strip() for chapter in file]
+    return [chapter.strip().lower() for chapter in file]
 
 
 def get_html(manga):
@@ -104,7 +104,7 @@ def check(manga):
 
     chapters = sorted([int(chapter.split(' ')[-1]) for chapter in difference])
 
-    title = manga.capitalize() + ' '
+    title = manga + ' '
     return [title + str(chapter) for chapter in chapters]
 
 
@@ -119,7 +119,7 @@ def get_new_chapters():
     chapters = []
     for manga in get_mangas():
         for chapter in check(manga):
-            chapters.append(chapter)
+            chapters.append(chapter.title())
 
     return chapters
 
