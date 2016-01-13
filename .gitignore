@@ -55,3 +55,10 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# PyCharm
+.idea/
+
+# Data files
+manga/
+manga.txt
