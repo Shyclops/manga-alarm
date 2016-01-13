@@ -1,4 +1,3 @@
-
 from html.parser import HTMLParser
 from urllib import request
 from urllib.error import HTTPError
@@ -6,222 +5,315 @@ from os.path import exists
 from os import mkdir
 
 
-class MangaPandaChecker(HTMLParser):
+# from http://stackoverflow.com/questions/5967500/
+#          how-to-correctly-sort-a-string-with-a-number-inside
+
+import re
+
+
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+
+def natural_keys(text):
     """
-    Current Usage:
+    alist.sort(key=natural_keys) sorts in human order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    """
+    return [ atoi(c) for c in re.split('(\d+)', text) ]
 
-    # first declare a MangaFoxChecker
-    checker = MangaPandaChecker()
 
-    # next simply use the <check> method to get a list of
-    # all chapters under that name
-    # ex. for 'bleach'
-    checker.check_for_update('bleach')
+class MangaSite(HTMLParser):
+    """An abstract class that will allow you to extract all the released
+    chapters of a manga on a certain site.
 
-    # this will print a list of all chapters of bleach from MangaPanda
-
-    # ex. for 'onepunch man'
-    checker.check_for_update('onepunch man')
-    # this will print a list of all chapters of onepunch man from MangaPanda
     """
 
-    def __init__(self):
-        super(MangaPandaChecker, self).__init__()
-        self.chapter_listing_started = False
+    def __init__(self, url, separator):
+        super(MangaSite, self).__init__()
+        self.chapter_lists_started = False
         self.chapter_found = False
-        self.chapter_list = []
+        self.chapter_list = set()
+        self.url = url
+        self.separator = separator
 
     def handle_starttag(self, tag, attrs):
-        if self.chapter_listing_started:
-            if tag == 'a':
+        if self.chapter_lists_started:
+            if self.was_chapter_found(tag, attrs):
                 self.chapter_found = True
-        if tag == 'div':
-            if ('id', 'chapterlist') in attrs:
-                self.chapter_listing_started = True
-            elif ('class', 'clear') in attrs:
-                self.chapter_listing_started = False
+        if self.has_chapter_lists_started(tag, attrs):
+            self.chapter_lists_started = True
+        elif self.has_chapter_lists_ended(tag, attrs):
+            self.chapter_lists_started = False
 
     def handle_endtag(self, tag):
-        if self.chapter_listing_started:
-            if tag == 'a':
+        if self.chapter_lists_started:
+            if self.has_chapter_ended(tag):
                 self.chapter_found = False
 
     def handle_data(self, data):
         if self.chapter_found:
-            self.chapter_list.append(data)
+            self.chapter_list.add(data.split(' ')[-1])
 
-    def check_for_update(self, manga):
-        self.chapter_listing_started = False
+    def has_chapter_lists_started(self, tag, attrs):
+        """
+
+        :param tag: the tag found
+        :type tag: str
+        :param attrs: the attributes of the tag
+        :type attrs: str
+        :return: if this tag signals a chapter list has started
+        :rtype: bool
+        """
+        raise NotImplementedError
+
+    def has_chapter_lists_ended(self, tag, attrs):
+        """
+
+        :param tag: the tag found
+        :type tag: str
+        :param attrs: the attributes of the tag
+        :type attrs: str
+        :return: if this tag signals a chapter list has ended
+        :rtype: bool
+        """
+        raise NotImplementedError
+
+    def was_chapter_found(self, tag, attrs):
+        """
+
+        :param tag: the tag found
+        :type tag: str
+        :param attrs: the attributes of the tag
+        :type attrs: str
+        :return: if this tag signals a chapter has been found
+        :rtype: bool
+        """
+        raise NotImplementedError
+
+    def has_chapter_ended(self, tag):
+        """
+
+        :param tag: the tag found
+        :type tag: str
+        :return: if this tag signals a chapter has ended
+        :rtype: bool
+        """
+        raise NotImplementedError
+
+    def check_for_updates(self, manga):
+        """
+
+        :param manga: the manga to check for
+        :type manga: str
+        :return: a set of all chapters of this manga
+        :rtype: set{str}
+        """
+        manga = manga.lower()
+        self.chapter_lists_started = False
         self.chapter_found = False
-        self.chapter_list = []
+        self.chapter_list = set()
 
         html = self.get_html(manga)
 
-        if not html:
+        if html is None:
             return []
 
         self.feed(html)
 
-        return [chapter.lower() for chapter in self.chapter_list]
+        return self.chapter_list
 
     def get_html(self, manga):
+        """
+
+        :param manga: the name of the manga
+        :type manga: str
+        :return: the html of the webpage for this manga on this site
+        :rtype: str
+        """
         try:
-            with request.urlopen('http://www.mangapanda.com/' +
-                                 '-'.join(manga.split(' '))) as response:
+            with request.urlopen(self.url +
+                                 self.separator.join(manga.split(' ')))\
+                    as response:
                 html = str(response.read())
         except HTTPError:
             return None
-
         return html
 
 
-class MangaFoxChecker(HTMLParser):
-    """
-    Current Usage:
-
-    # first declare a MangaFoxChecker
-    checker = MangaFoxChecker()
-
-    # next simply use the <check> method to get a list of
-    # all chapters under that name
-    # ex. for 'bleach'
-    checker.check_for_update('bleach')
-
-    # this will print a list of all chapters of bleach from MangaFox
-
-    # ex. for 'onepunch man'
-    checker.check_for_update('onepunch man')
-    # this will print a list of all chapters of onepunch man from MangaFox
-    """
+class MangaPanda(MangaSite):
 
     def __init__(self):
-        super(MangaFoxChecker, self).__init__()
-        self.chapter_listing_started = False
-        self.chapter_found = False
-        self.chapter_list = []
+        super(MangaPanda, self).__init__('http://www.mangapanda.com/', '-')
 
-    def handle_starttag(self, tag, attrs):
-        if self.chapter_listing_started:
-            if tag == 'a' and ('class', 'tips') in attrs:
-                self.chapter_found = True
-        if tag == 'ul':
-            if ('class', 'chlist') in attrs:
-                self.chapter_listing_started = True
+    def has_chapter_lists_started(self, tag, attrs):
+        return tag == 'table' and ('id', 'listing') in attrs
 
-    def handle_endtag(self, tag):
-        if tag == 'ul':
-            self.chapter_listing_started = False
-        if self.chapter_listing_started:
-            if tag == 'a':
-                self.chapter_found = False
+    def has_chapter_lists_ended(self, tag, attrs):
+        return tag == 'table'
 
-    def handle_data(self, data):
-        if self.chapter_found:
-            self.chapter_list.append(data)
+    def was_chapter_found(self, tag, attrs):
+        return tag == 'a'
 
-    def check_for_update(self, manga):
-        self.chapter_listing_started = False
-        self.chapter_found = False
-        self.chapter_list = []
-
-        html = self.get_html(manga)
-
-        if not html:
-            return []
-
-        self.feed(html)
-
-        return [chapter.lower() for chapter in self.chapter_list]
-
-    def get_html(self, manga):
-        try:
-            with request.urlopen('http://www.mangafox.me/manga/' +
-                                 '_'.join(manga.split(' '))) as response:
-                html = str(response.read())
-        except HTTPError:
-            return None
-        return html
+    def has_chapter_ended(self, tag):
+        return tag == 'a'
 
 
-def get_old_listing(manga):
-    try:
-        file = open('manga/' + manga + '.txt', 'r')
-    except FileNotFoundError:
+class MangaFox(MangaSite):
+
+    def __init__(self):
+        super(MangaFox, self).__init__('http://www.mangafox.me/manga/', '_')
+
+    def has_chapter_lists_started(self, tag, attrs):
+        return tag == 'ul' and ('class', 'chlist') in attrs
+
+    def has_chapter_lists_ended(self, tag, attrs):
+        return tag == 'ul'
+
+    def was_chapter_found(self, tag, attrs):
+        return tag == 'a' and ('class', 'tips') in attrs
+
+    def has_chapter_ended(self, tag):
+        return tag == 'a'
+
+
+def get_mangas(src='manga.txt'):
+    """Return a list of the mangas to check for
+
+    :param src: file containing all the mangas
+    :type src: str
+    :return: list of all the manga titles in the file (and alternate titles)
+    :rtype: list[list[str]]
+    """
+
+    """
+            ^^         |         ^^
+            ::         |         ::
+     ^^     ::         |         ::     ^^
+     ::     ::         |         ::     ::
+      ::     ::        |        ::     ::
+        ::    ::       |       ::    ::
+          ::    ::   _/~\_   ::    ::
+            ::   :::/     \:::   ::
+              :::::(       ):::::
+                    \ ___ /
+               :::::/`   `\:::::
+             ::    ::\o o/::    ::
+           ::     ::  :":  ::     ::
+         ::      ::   ` `   ::      ::
+        ::      ::           ::      ::
+       ::      ::             ::      ::  R. Nykvist (Chuckles)
+       ^^      ::             ::      ^^
+               ::             ::
+               ^^             ^^
+    """
+    if not exists(src):  # Fail silently XD
         return []
 
-    return [chapter.strip().lower() for chapter in file]
+    file = open(src, 'r')
+    return [manga.strip().split('$$') for manga in file]
 
 
-def record(manga, chapter_list):
-    if not exists('manga/'):
-        mkdir('manga/')
+def get_old_listings(mangas=get_mangas(), src='manga/'):
+    """
 
-    file = open('manga/' + manga + '.txt', 'w')
-    for chapter in chapter_list:
-        file.write(chapter + '\n')
+    :param mangas: the manga titles
+    :type mangas: list[lst[str]]
+    :param src: path to listing
+    :type src: str
+    :return: dictionary mapping manga title to its logged chapters
+    :rtype: dict{str: set{str}}
+    """
+    '''
+               ;               ,
+             ,;                 '.
+            ;:                   :;
+           ::                     ::
+           ::                     ::
+           ':                     :
+            :.                    :
+         ;' ::                   ::  '
+        .'  ';                   ;'  '.
+       ::    :;                 ;:    ::
+       ;      :;.             ,;:     ::
+       :;      :;:           ,;"      ::
+       ::.      ':;  ..,.;  ;:'     ,.;:
+        "'"...   '::,::::: ;:   .;.;""'
+            '"""....;:::::;,;.;"""
+        .:::.....'"':::::::'",...;::::;.
+       ;:' '""'"";.,;:::::;.'""""""  ':;
+      ::'         ;::;:::;::..         :;
+     ::         ,;:::::::::::;:..       ::
+     ;'     ,;;:;::::::::::::::;";..    ':.
+    ::     ;:"  ::::::"""'::::::  ":     ::
+     :.    ::   ::::::;  :::::::   :     ;
+      ;    ::   :::::::  :::::::   :    ;
+       '   ::   ::::::....:::::'  ,:   '
+        '  ::    :::::::::::::"   ::
+           ::     ':::::::::"'    ::
+           ':       """""""'      ::
+            ::                   ;:
+            ':;                 ;:"
+    -hrr-     ';              ,;'
+                "'           '"
+                  '
+    '''
+    old_listings = {}
+    for manga_titles in mangas:
+        listing = set()
 
+        if exists(src + manga_titles[0] + '.txt'):  # Again, Fail silently XD
+            file = open(src + manga_titles[0] + '.txt', 'r')
 
-def check_manga_panda(manga):
-    checker = MangaPandaChecker()
-    new_chapter_list = [chapter.strip().title() for chapter in checker.check_for_update(manga)]
-    old_chapter_list = [chapter.strip().title() for chapter in get_old_listing(manga)]
-    record(manga, new_chapter_list)
-    difference = list(set(new_chapter_list) - set(old_chapter_list))
-    print(manga, len(new_chapter_list), len(old_chapter_list), len(difference))
-
-    chapters = sorted([int(chapter.split(' ')[-1]) for chapter in difference])
-
-    title = manga + ' '
-    return [title + str(chapter) for chapter in chapters]
-
-
-def check_manga_fox(manga):
-    checker = MangaFoxChecker()
-    new_chapter_list = [chapter.strip().title() for chapter in checker.check_for_update(manga)]
-    old_chapter_list = [chapter.strip().title() for chapter in get_old_listing(manga)]
-    record(manga, new_chapter_list)
-    difference = list(set(new_chapter_list) - set(old_chapter_list))
-    print(manga, len(new_chapter_list), len(old_chapter_list), len(difference))
-
-    chapters = []
-    for chapter in difference:
-        chapter_number_str = chapter.split(' ')[-1]
-        if '.' in chapter_number_str:
-            chapters.append(float(chapter_number_str))
-        else:
-            chapters.append(int(chapter_number_str))
-    chapters.sort()
-
-    title = manga + ' '
-    return [title + str(chapter) for chapter in chapters]
-
-
-def get_mangas():
-    if not exists('manga.txt'):
-        return []
-    file = open('manga.txt', 'r')
-    return [manga.strip() for manga in file]
-
-
-def get_new_chapters():
-    chapters = []
-    for manga in get_mangas():
-        for chapter in check_manga_fox(manga):
-            chapters.append(chapter.title())
-
-    return chapters
+            for chapter in file:
+                listing.add(chapter.strip().title())
+        old_listings[manga_titles[0]] = listing
+    return old_listings
 
 
-"""
-Put all the manga names (from MangaPanda) in a file called manga.txt
-one title per line (dont spell it wrong)
+def build_new_listings(srcs, mangas=get_mangas()):
+    """
 
-And this will print out all the new chapters in the console currently
-as well as save the ones it just found in files in the folder manga
-(which will be placed in the current directory)
-"""
+    :param srcs: list of sites as sources
+    :type srcs: list[MangaSite]
+    :param mangas: list of manga titles
+    :type mangas: list[str]
+    :return: dictionary mapping manga title to its chapters
+    :rtype: dict{str: set{str}}
+    """
+    new_listings = {}
+    for manga_titles in mangas:
+        listing = set()
+        for manga in manga_titles:
+            for src in srcs:
+                listing = listing.union(src.check_for_updates(manga))
+        new_listings[manga_titles[0]] = listing
+    return new_listings
 
-if __name__ == '__main__':
-    for chapter in get_new_chapters():
-        print(chapter)
 
+def change_in_listings(old, new, mangas=get_mangas()):
+    change = {}
+
+    for manga_title in mangas:
+        change[manga_title[0]] = new[manga_title[0]] - old[manga_title[0]]
+
+    return change
+
+
+def log_listings(listings, src='manga/'):
+    """
+
+    :param listings: dictionary mapping manga title to its chapters
+    :type listings: dict{str: list[str]}
+    :param src: folder to place the logs in
+    :type src: str
+    """
+    if not exists(src):
+        mkdir(src)
+
+    for manga, chapters in listings.items():
+        file = open(src + manga + '.txt', 'w')
+        for chapter in sorted(chapters, key=natural_keys):
+            file.write(chapter)
+            file.write('\n')

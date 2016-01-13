@@ -62,3 +62,7 @@ target/
 # Data files
 manga/
 manga.txt
+*.txt
+
+# Old files
+*.old
