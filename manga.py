@@ -27,7 +27,6 @@ def natural_keys(text):
 class MangaSite(HTMLParser):
     """An abstract class that will allow you to extract all the released
     chapters of a manga on a certain site.
-
     """
 
     def __init__(self, url, separator):
@@ -58,7 +57,6 @@ class MangaSite(HTMLParser):
 
     def has_chapter_lists_started(self, tag, attrs):
         """
-
         :param tag: the tag found
         :type tag: str
         :param attrs: the attributes of the tag
@@ -70,7 +68,6 @@ class MangaSite(HTMLParser):
 
     def has_chapter_lists_ended(self, tag, attrs):
         """
-
         :param tag: the tag found
         :type tag: str
         :param attrs: the attributes of the tag
@@ -82,7 +79,6 @@ class MangaSite(HTMLParser):
 
     def was_chapter_found(self, tag, attrs):
         """
-
         :param tag: the tag found
         :type tag: str
         :param attrs: the attributes of the tag
@@ -94,7 +90,6 @@ class MangaSite(HTMLParser):
 
     def has_chapter_ended(self, tag):
         """
-
         :param tag: the tag found
         :type tag: str
         :return: if this tag signals a chapter has ended
@@ -104,19 +99,22 @@ class MangaSite(HTMLParser):
 
     def check_for_updates(self, manga):
         """
-
         :param manga: the manga to check for
         :type manga: str
         :return: a set of all chapters of this manga
         :rtype: set{str}
         """
-        manga = manga.lower()
+        # manga = manga.lower()
         self.chapter_lists_started = False
         self.chapter_found = False
         self.chapter_list = set()
 
         html = self.get_html(manga)
-
+        
+        f = open('anime_html.txt', 'w')
+        f.write(html)
+        f.close()
+        
         if html is None:
             return []
 
@@ -126,7 +124,6 @@ class MangaSite(HTMLParser):
 
     def get_html(self, manga):
         """
-
         :param manga: the name of the manga
         :type manga: str
         :return: the html of the webpage for this manga on this site
@@ -177,10 +174,25 @@ class MangaFox(MangaSite):
     def has_chapter_ended(self, tag):
         return tag == 'a'
 
+class AnimeShow(MangaSite):
+
+    def __init__(self):
+        super(AnimeShow, self).__init__('http://www.animeshow.tv/','-')
+
+    def has_chapter_lists_started(self, tag, attrs):
+        return tag == 'table' and ('id', 'episode-list-entry-tbl') in attrs
+
+    def has_chapter_lists_ended(self, tag, attrs):
+        return tag == 'table'
+
+    def was_chapter_found(self, tag, attrs):
+        return tag == 'h2'
+
+    def has_chapter_ended(self,tag):
+        return tag == 'h2'
 
 def get_mangas(src='manga.txt'):
     """Return a list of the mangas to check for
-
     :param src: file containing all the mangas
     :type src: str
     :return: list of all the manga titles in the file (and alternate titles)
@@ -217,7 +229,6 @@ def get_mangas(src='manga.txt'):
 
 def get_old_listings(mangas=get_mangas(), src='manga/'):
     """
-
     :param mangas: the manga titles
     :type mangas: list[lst[str]]
     :param src: path to listing
@@ -274,7 +285,6 @@ def get_old_listings(mangas=get_mangas(), src='manga/'):
 
 def build_new_listings(srcs, mangas=get_mangas()):
     """
-
     :param srcs: list of sites as sources
     :type srcs: list[MangaSite]
     :param mangas: list of manga titles
@@ -303,7 +313,6 @@ def change_in_listings(old, new, mangas=get_mangas()):
 
 def log_listings(listings, src='manga/'):
     """
-
     :param listings: dictionary mapping manga title to its chapters
     :type listings: dict{str: list[str]}
     :param src: folder to place the logs in
